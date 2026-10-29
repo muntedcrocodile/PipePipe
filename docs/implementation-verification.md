@@ -56,3 +56,19 @@ Static acceptance review identified and corrected sparse-row history resume usin
 At client `5227c48dc4107e3172b74003afa7c633e94cbaff`, eight JVM tests passed with zero failures/skips, and isolated debug plus Android-test APKs built successfully. All 57 feature instrumentation methods compiled; **none executed**. These build outputs are superseded/on hold pending the checkpoint fix. No final optimized release or final artifact provenance is claimed for this intermediate state.
 
 The Samsung phone remains authorized, but device access is now exclusively owned by ForkKeeper's broker. PipePipe tests require the source-only broker extension and restricted diagnostic plan described in [the device test plan](device-test-plan.md), independent review, and subsequent provisioning by the device owner. This thread has made no PipePipe device calls, broker changes or automatic-maintenance enrollment. Physical acceptance and final integrated build evidence remain outstanding.
+
+## Reviewed server candidate build
+
+Client `10222dec3255ea3e0a618337ca1837ad1b3b9306`, pinned by root `4c40746dc766ff75d487600699b4ca52e21159ac`, passed the final isolated JVM/debug/Android-test build in 55 seconds and the signed R8 release build in 2 minutes 40 seconds. Eight JVM tests passed with zero failures/errors/skips. All **69 instrumentation methods across eight classes compiled; zero executed**. The class counts are 40/11/4/4/1/1/1/7 in [device-plan order](device-test-plan.md); one swipe confirmation method requires API 29+.
+
+All nine APKs passed signature and packaged-identity checks, with Signature Scheme v2 enabled. All four optimized release manifests are non-debuggable. ARM64 release ZIP alignment and every load segment in its ten native libraries satisfy 16 KiB alignment. Exact bytes, logs, R8 mapping, test XML, manifests and verification scripts are preserved privately outside Git. No APK was published or sent.
+
+The nonsecret artifact/source manifest SHA-256 is `d183a080214e92f46ec3b7e85239e846ae1d4b4d79aa0e6e2833265c162ecfa8`; reviewed plan SHA-256 is `b942c324e0d5ae427e1ddf8e2c6ec1d8326b83c51dbed098cad7854aeb15751a`. The manifest records exact root/client/extractor revisions, toolchain, commands, all ABI identities and per-file verification. For the ARM64 diagnostic lane:
+
+- Debug target APK SHA-256: `469f5736e9a65d5305ca02dedb58780162f6e0cbc5171903c90935e2e72abcf5`, version 111004, debuggable.
+- Android test APK SHA-256: `89ed224bb83d7a19c9bd238b010204af149f721875a2ed53f955d60830a4aeb9`, debuggable, no declared version code. Its runner is `androidx.test.runner.AndroidJUnitRunner`, targeting the dedicated debug package.
+- Optimized manual APK SHA-256: `1b926f09415c9d37dc96638696816d7675875b42167c6d0ab21f861672903c55`, version 111004, non-debuggable.
+- Debug/test signing certificate SHA-256: `bfadb6be9109016e35054c9591542ffc14df0c360eb8d635b595b1716ae043ce`.
+- Manual test signing certificate SHA-256: `5644fffef9eebff9f4446e6bbd8844d225f03879511f88bc3502f3a42812eb49`.
+
+These are reviewed build inputs, not admission or device-test results. Independent broker review is still in progress. Artifact reconciliation identified a concrete compatibility blocker: the generated test APK has an absent/effective-zero version code, whereas the frozen broker patch requires positive numeric versions for every role. The device owner will revise only the exact pinned diagnostic test-role handling after the frozen review returns, preserving app/managed-production version checks. Scoped logcat is unavailable in this broker revision; no broad-log fallback is authorized. Cleanup-platform verification, provisioning and the full physical acceptance checklist remain pending.
