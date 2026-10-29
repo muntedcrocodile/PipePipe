@@ -1,12 +1,12 @@
 # PipePipe physical-device diagnostic plan
 
-Status: proposed broker plan, awaiting capability review, provisioning and APK identity verification. App fixes and regression additions are in progress following static acceptance review. The device owner's source-only broker extension is underway after the coordinated Fleet update; provisioning/restart/leases/device operations remain on hold until independent review. This plan does not enroll PipePipe in automatic maintenance. No PipePipe device operation is authorized through an unprovisioned route.
+Status: proposed broker plan, awaiting capability review, provisioning and final APK identity verification. App fixes and regression additions have passed independent source review; the final integrated builds are in progress. The device owner's frozen source-only broker extension is under independent review after the coordinated Fleet update; provisioning/restart/leases/device operations remain on hold. This plan does not enroll PipePipe in automatic maintenance. No PipePipe device operation is authorized through an unprovisioned route.
 
 ## Source and build identity
 
-Root source: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
+Root baseline: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Current client candidate: `10222dec3255ea3e0a618337ca1837ad1b3b9306`, independently source-reviewed with integrated builds pending. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
 
-The baseline debug configuration hardcodes `.debug`; its branch-name suffix path is disabled. To protect any existing standard debug installation, an optional debug suffix override is being implemented. The proposed diagnostic identities below must be verified against built APK manifests before installation:
+The baseline debug configuration hardcodes `.debug`; its branch-name suffix path is disabled. An optional validated debug suffix override now protects existing standard debug installations. The diagnostic identities below were verified in preliminary packaged APKs and must be reverified against final artifacts before installation:
 
 - Instrumented target: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest.debug`.
 - Test APK: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest.debug.test`.
@@ -21,9 +21,9 @@ Protected packages outside this plan include the official `InfinityLoop1309.NewP
 
 ## Fixed instrumentation suite
 
-The original suite had **42 methods in seven classes**, not 42 classes. Resume/selection regressions add ten methods and swipe regressions add five, bringing the currently committed suite to **57 methods in eight classes**. A checkpoint-failure follow-up is in progress and may increase the final count:
+The original suite had **42 methods in seven classes**, not 42 classes. Resume/selection regressions add ten methods, swipe regressions add five, prepared-player checkpoint-failure regressions add nine, and production live-pause callback regressions add three, bringing the current candidate suite to **69 methods in eight classes**:
 
-1. `org.schabi.newpipe.player.playqueue.PersistentPlayQueueTest` — 28 tests.
+1. `org.schabi.newpipe.player.playqueue.PersistentPlayQueueTest` — 40 tests.
 2. `org.schabi.newpipe.info_list.VideoSwipeActionsTest` — 11 tests; the playlist-confirmation regression requires API 29+ and must be reported as skipped on an older device.
 3. `org.schabi.newpipe.settings.FeatureDefaultsImportTest` — 4 tests.
 4. `org.schabi.newpipe.player.playqueue.PersistentSourcePlaybackTest` — 4 tests.
