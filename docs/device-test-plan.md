@@ -6,7 +6,7 @@ The fixed suite and acceptance scope below remain the testing checklist. The str
 
 ## Source and build identity
 
-Root baseline: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Latest device-tested client: `16a275d5a9518fd239aa17a025ae3f091fb32f8c` (72/72 tests passed). Current candidate: `5899b95e68c0bea4009a1d738949eb05716b6141`, adding a Queue home-tab navigation fix and two compiled but unexecuted regressions. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
+Root baseline: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Current device-tested client: `063616da91ea81d14c6783701b307cf94de5bc57` (**75/75 passed**). The Queue navigation regressions and optimized home-tab path passed after recovery; a separate application lifecycle race was fixed and verified. Further manual acceptance is blocked by a new broker UI-dump failure, not the earlier application crash. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
 
 The baseline debug configuration hardcodes `.debug`; its branch-name suffix path is disabled. An optional validated debug suffix override now protects existing standard debug installations. The diagnostic identities below were verified in preliminary packaged APKs and must be reverified against final artifacts before installation:
 
@@ -23,10 +23,10 @@ Protected packages outside this plan include the official `InfinityLoop1309.NewP
 
 ## Fixed instrumentation suite
 
-The original suite had **42 methods in seven classes**, not 42 classes. The first actual 69-method run exposed nine failures; after the sparse-uploader fix and fixture correction, 70/70 passed. Adding two real touchscreen regressions produced **72/72 passing methods across eight classes**. The current navigation-fix candidate adds two more methods, so **74 are authored/compiled, with the two navigation regressions not yet executed**:
+The original suite had **42 methods in seven classes**, not 42 classes. Actual results progressed from 69 methods with nine failures, to corrected 70/70 and expanded 72/72 passes. The two navigation regressions then passed, but the integrated 74-method run crashed after 56 terminal passes due to a queued preference callback on a detached fragment. After fixing that lifecycle race and adding a regression, the current suite passed **75/75 methods across eight classes**, with zero failures/errors/skips:
 
 1. `org.schabi.newpipe.player.playqueue.PersistentPlayQueueTest` — 40 tests.
-2. `org.schabi.newpipe.info_list.VideoSwipeActionsTest` — 16 authored tests: 14 passed on the last installed test APK, two new navigation tests are unexecuted. The playlist-confirmation regression requires API 29+; no tests were skipped on the observed API 37 phone.
+2. `org.schabi.newpipe.info_list.VideoSwipeActionsTest` — 17 tests, all passed. The playlist-confirmation regression requires API 29+; it executed on the observed API 37 phone.
 3. `org.schabi.newpipe.settings.FeatureDefaultsImportTest` — 4 tests.
 4. `org.schabi.newpipe.player.playqueue.PersistentSourcePlaybackTest` — 4 tests.
 5. `org.schabi.newpipe.player.playqueue.QueueHistoryTest` — 1 test.
