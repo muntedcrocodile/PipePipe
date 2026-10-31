@@ -1,5 +1,8 @@
 # Swipe and persistent Queue mode implementation
 
+> Current result: **82/82 device methods + 8 JVM tests passed at c12bb6713**. Extensive actual optimized/manual results, exact artifacts, open deferred-open review findings and the current **post-phone-reboot recovery/quiescence block** are in [latest-device-acceptance.md](latest-device-acceptance.md). Sections below retain historical candidates, failures and ownership windows; their old compiled-only/quarantine statements are not the current test verdict.
+
+
 Implements [issue #1](https://github.com/muntedcrocodile/PipePipe/issues/1) against the latest upstream fetched on 29 October 2026: root `3fd38c6`, client `e40a1819c` (5.5.0), extractor `a1aa6841`. Feature client: `da54421e6878aef59520e80b21dfb5539bcef530`, in 26 incremental commits.
 
 ## Implementation
