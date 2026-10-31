@@ -1,12 +1,14 @@
 # PipePipe physical-device diagnostic plan
 
-Current access: the user's replacement AGENTS instructions and installed `android-device` skill authorize normal-account phone use on server1/ghost5 under ForkKeeper's exclusive renewable lease. No worker switch, automatic-maintenance enrollment or app-plan provisioning is required. Fleet subsequently verified isolated-package quiescence and successful maintenance release/cleanup, then cleared continuation. The latest attempt is blocked by an occupied lease: after the retained-error runtime deployment, 10 normal acquire requests on 30 October returned busy, no token was issued, and no phone operation occurred. The earlier 15-request busy window is preserved below. The same worker remains the only app-testing lane; wait for availability without disturbing the active owner. Earlier stale release attempts remain failures and are not reclassified by the later maintenance proof. Existing app data and unknown retained package state remain protected. Never bypass the broker.
+Current access: load the installed `android-adb` skill on server1/ghost5 and acquire ForkKeeper's exclusive renewable lease directly as the normal user. No worker switch, enrollment or app-plan provisioning is required. The parent now owns phone testing directly; the prior child has finished and must not be contacted for more phone work. Serialize operations, renew before expiry, retain safe error/UTC receipts, and keep the same token for `disposition:retained` fallback. Stop stale-token use on revocation. Preserve unrelated packages/data and never bypass the broker.
+
+Latest result (31 October 2026): client `77ec23671961d0686443cbf0169fbb78b301177b` passed **80/80 device tests and 8/8 JVM tests**. Real optimized manual checks found and verified fixes for cold first-enqueue video attachment and cold Queue service connection. Manual acceptance remains incomplete: after accepting real backup import/settings confirmations, a screenshot revoked the lease (`code=unknown`, `phase=operation`, correlation `46288778538c24a3dcd11217b3cd8ab7`, 10:41:35.909–10:41:37.203 UTC). The guard exited and token was removed; all stop/observation/release attempts were stale. Broker idle does not prove app quiescence or successful explicit release. No reacquisition or service/config changes followed. Fleet owns infrastructure recovery.
 
 The fixed suite and acceptance scope below remain the testing checklist. The stricter broker-specific protocol/provisioning proposal is preserved as historical design only: its patch was independently reviewed, found to require changes, and remains undeployed. Those obsolete plan/enrollment/version-policy gates do not apply to the new general leased route. Signed maintenance merge validation remains separate. Final app builds and artifact identities have been verified, but instrumentation/device outcomes must be reported from actual execution.
 
 ## Source and build identity
 
-Root baseline: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Current device-tested client: `063616da91ea81d14c6783701b307cf94de5bc57` (**75/75 passed**). The Queue navigation regressions and optimized home-tab path passed after recovery; a separate application lifecycle race was fixed and verified. Further manual acceptance is currently blocked by lease-resource contention after Fleet recovered from the later UI-dump incident; no new app or infrastructure failure occurred in the latest attempt. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
+Root baseline: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`; client baseline: `da54421e6878aef59520e80b21dfb5539bcef530`; extractor: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`. Current device-tested client: `77ec23671961d0686443cbf0169fbb78b301177b` (**80/80 passed**). The earlier 75-test result and occupied-lease windows are historical evidence. See the latest direct-testing section in `implementation-verification.md` for candidate failures, fixed regressions, real manual outcomes and the current revocation block. Local branches: `feature/swipes-persistent-queue` in root and client. Only the user's `muntedcrocodile` root/client forks receive changes.
 
 The baseline debug configuration hardcodes `.debug`; its branch-name suffix path is disabled. An optional validated debug suffix override now protects existing standard debug installations. The diagnostic identities below were verified in preliminary packaged APKs and must be reverified against final artifacts before installation:
 
@@ -23,10 +25,10 @@ Protected packages outside this plan include the official `InfinityLoop1309.NewP
 
 ## Fixed instrumentation suite
 
-The original suite had **42 methods in seven classes**, not 42 classes. Actual results progressed from 69 methods with nine failures, to corrected 70/70 and expanded 72/72 passes. The two navigation regressions then passed, but the integrated 74-method run crashed after 56 terminal passes due to a queued preference callback on a detached fragment. After fixing that lifecycle race and adding a regression, the current suite passed **75/75 methods across eight classes**, with zero failures/errors/skips:
+The original suite had **42 methods in seven classes**, not 42 classes. Actual results progressed from 69 methods with nine failures, to corrected 70/70 and expanded 72/72 passes. The two navigation regressions then passed, but the integrated 74-method run crashed after 56 terminal passes due to a queued preference callback on a detached fragment. After fixing that lifecycle race and adding a regression, the suite passed 75/75. Direct parent testing then added five regressions and the current suite passed **80/80 methods across eight classes**, with zero failures/errors/skips:
 
-1. `org.schabi.newpipe.player.playqueue.PersistentPlayQueueTest` — 40 tests.
-2. `org.schabi.newpipe.info_list.VideoSwipeActionsTest` — 17 tests, all passed. The playlist-confirmation regression requires API 29+; it executed on the observed API 37 phone.
+1. `org.schabi.newpipe.player.playqueue.PersistentPlayQueueTest` — 41 tests.
+2. `org.schabi.newpipe.info_list.VideoSwipeActionsTest` — 21 tests, all passed. The playlist-confirmation regression requires API 29+; it executed on the observed API 37 phone.
 3. `org.schabi.newpipe.settings.FeatureDefaultsImportTest` — 4 tests.
 4. `org.schabi.newpipe.player.playqueue.PersistentSourcePlaybackTest` — 4 tests.
 5. `org.schabi.newpipe.player.playqueue.QueueHistoryTest` — 1 test.
@@ -46,7 +48,7 @@ These tests create dedicated SQLite fixture files, manipulate isolated target pr
 
 ## Historical strict broker proposal
 
-This section describes the undeployed strict extension, not prerequisites for current general leased testing. The current `android-device` skill controls access and renewal/release behavior.
+This section describes the undeployed strict extension, not prerequisites for current general leased testing. The current `android-adb` skill controls access and renewal/release behavior.
 
 Retain the existing exclusive device authority, private ADB identity, isolated client UID and lease protocol. No raw USB access, service UID/key access, privileged-user admission, socket escape, generic shell, arbitrary `run-as`, uninstall or package-data clear is requested.
 
