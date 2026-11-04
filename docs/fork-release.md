@@ -75,7 +75,7 @@ Every APK must have exactly this identity:
 The release suffix is passed through the existing `-DpackageSuffix` interface.
 The debug validation build uses the separate `.queue.devicetest.debug` package
 and debug certificate. This optimized release updates the previously distributed
-`.queue.devicetest` release using its existing certificate. `apksigner verify --verbose --print-certs` rejects
+`.queue.devicetest` release using its existing certificate. `apksigner verify --verbose --print-certs-pem` rejects
 unsigned APKs, invalid signatures, extra signers, or a different certificate.
 The APK manifest must also be non-debuggable and not test-only. Secrets missing
 from an enabled fork fail the build; there is no unsigned fallback.
@@ -210,3 +210,10 @@ normalization of a source-side `v` prefix.
 SDK package names were checked in [Google's SDK repository catalog](https://dl.google.com/android/repository/repository2-3.xml);
 the [Android 17 setup guide](https://developer.android.com/about/versions/17/setup-sdk)
 uses `compileSdk = 37`.
+
+The certificate verifier hashes the emitted PEM certificate’s DER bytes, rather
+than depending on human-readable `Signer #1` / `V2 Signer` labels, which changed
+in Build Tools 37. It requires exactly one signer and the pinned certificate;
+missing certificates, additional signers, or a different certificate fail.
+This follow-up was checked with the real Build Tools 37 executable against both
+the owned debug APK and existing dedicated release APK, plus negative fixtures.
