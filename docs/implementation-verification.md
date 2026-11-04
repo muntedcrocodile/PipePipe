@@ -1,5 +1,9 @@
 # Swipe and persistent Queue mode implementation
 
+Current validation is recorded in [latest-device-acceptance.md](latest-device-acceptance.md): client `4746c6286`, latest upstream integrated, **124/124 physical-device instrumentation tests and 8/8 JVM tests passed**. Manual subscription refresh fetched again within 66 seconds. The [fork release workflow](fork-release.md) builds signed optimized APKs on root `main` pushes.
+
+The dated entries below are historical and apply only to their named candidates; superseded access/provisioning requirements do not govern the current general leased device route.
+
 > Current result: **82/82 device methods + 8 JVM tests passed at c12bb6713**. Extensive actual optimized/manual results, exact artifacts, open deferred-open review findings and the subsequent **successful phone-reboot restoration and fresh explicit cleanup/release** are in [latest-device-acceptance.md](latest-device-acceptance.md). Sections below retain historical candidates, failures and ownership windows; their old compiled-only/quarantine statements are not the current test verdict.
 
 

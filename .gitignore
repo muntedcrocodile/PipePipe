@@ -2,3 +2,5 @@
 /web
 /nightly
 /.venv/
+
+__pycache__/
