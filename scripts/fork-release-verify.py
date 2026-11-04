@@ -2,6 +2,7 @@
 """Verify only newly built public outputs; never open signing keys or secrets."""
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -26,6 +27,24 @@ def require(condition: object, message: str) -> None:
 
 def run(*args: str) -> str:
     return subprocess.check_output(args, text=True).strip()
+
+
+def certificate_sha256(signature: str) -> set[str]:
+    # Build Tools 37 changed human-readable signer labels. Hash the emitted
+    # certificate DER instead; scheme-specific reports may repeat the same cert.
+    require(
+        re.findall(r"^Number of signers: ([0-9]+)$", signature, re.MULTILINE) == ["1"],
+        "Expected exactly one APK signer",
+    )
+    certificates = re.findall(
+        r"-----BEGIN CERTIFICATE-----\s*([A-Za-z0-9+/=\s]+?)\s*-----END CERTIFICATE-----",
+        signature,
+    )
+    require(certificates, "Missing APK signing certificate PEM")
+    return {
+        hashlib.sha256(base64.b64decode(re.sub(r"\s+", "", cert), validate=True)).hexdigest()
+        for cert in certificates
+    }
 
 
 def expected_version_name(base: int) -> str:
@@ -98,9 +117,8 @@ def main() -> None:
         code = base * 100 + ABI_CODES[abi]
         require(element["versionCode"] == code and element["versionName"] == version, "Gradle version mismatch")
 
-        signature = run(str(apksigner), "verify", "--verbose", "--print-certs", str(apk))
-        certs = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)$", signature, re.MULTILINE)
-        require([cert.lower() for cert in certs] == [CERT_SHA256], "APK signing certificate mismatch")
+        signature = run(str(apksigner), "verify", "--verbose", "--print-certs-pem", str(apk))
+        require(certificate_sha256(signature) == {CERT_SHA256}, "APK signing certificate mismatch")
         manifest = ET.fromstring(run(str(analyzer), "manifest", "print", str(apk)))
         require(manifest.get("package") == PACKAGE, "APK manifest package mismatch")
         require(manifest.get(ANDROID + "versionCode") == str(code), "APK manifest version code mismatch")
