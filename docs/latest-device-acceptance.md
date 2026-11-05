@@ -1,3 +1,5 @@
+Latest hotfix: [unavailable-service feed isolation, 127 device tests](feed-service-hotfix-20261105.md). The dated baseline below belongs to its original artifacts.
+
 # Physical-device acceptance — 4 November 2026
 
 ## Tested source and artifacts
