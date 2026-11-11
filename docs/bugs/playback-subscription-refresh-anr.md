@@ -1,6 +1,6 @@
 # Playback during large subscription refresh: investigation
 
-Status: investigation in progress; no verified fix or push.
+Status: upstream integrated; reproduction fixture awaiting device run; no verified fix or push.
 
 ## Scope and starting source
 
@@ -43,6 +43,58 @@ The filename's abbreviated revision is a provenance lead, not verified source
 identity. Candidate `272d2de259c9` is absent from the local client object store.
 The historical Nov 5 APK is not assumed to match this attachment.
 
+## Source synchronization
+
+Fleet fetched current remote source and supplied local bundles. Current fork root
+`88d69d469361a930fe6304e4db202797f295f691` was merged without rewriting history,
+yielding root `44dd8a28a13d2c80b17f44d466ebbd55f7f2059c`.
+Latest upstream root `3fd38c6dbdfa1d29c97d9d5b1344836347793ec3` is already an
+ancestor of that fork root. Client advanced to current fork
+`0a59c6264a4746efad9d98a5353efab4dab5bc3a`, then merged latest upstream
+`118ffc86baa811edae4d5659bbba7835f8ba6a92`, yielding
+`d115054f4716b142950e9a7dbce009935f02f4a9`. No merge conflicts.
+Extractor origin main remains `28a1a5ee889fadb36a435c43e0bc9483b59bb3bf`;
+the newer fork root already pins that revision.
+
+Release metadata for `v5.5.1000003` matches the attachment's versionCode, package,
+and target ABI and points to root `88d69d4` / client `0a59c626` / extractor
+`28a1a5e`. Its arm64 APK hash is
+`d54822461699e895a0e9a7ceff4b765a5ab8aa5bd959bcf7ea4e61b344f7f843`.
+This is a source-provenance inference from matching version metadata, not a hash
+match to the original failing APK. The filename suffix remains unresolved.
+
+One initial local root-bundle import unexpectedly triggered Git's recursive
+client fetch from GitHub. It was read-only; subsequent bundle imports explicitly
+disabled recursion. Remote server/device access remained exclusively with Fleet.
+
+## Reproduction fixture
+
+Client `d99fc7ea97280314ac62976989126cbb44cdc4dd` adds tests only.
+`SabrPlaybackSmokeTest#playbackDuringLargeSubscriptionRefresh` performs real
+online YouTube extraction and production SABR resolution, waits for decoded video
+and advancing audio, then invokes the production feed manager over 1,000 distinct
+synthetic RSS channels with 20 entries each. It asserts playback advances during
+refresh and successful results for every channel. All other downloader requests,
+including streaming SABR bodies, are delegated unchanged.
+
+The fixture refuses any application ID except `.queue.devicetest.refresh` and
+uses an in-memory Room database, restoring the previous singleton, downloader,
+and changed RSS preference afterward. It does not load personal subscription
+data. This exercises dedicated RSS extraction, not full channel-tab extraction,
+and cannot by itself prove the original ANR's cause or resolution.
+
+Fleet preflight found Samsung SM-G960F (`starlte`), Android 17 / API 37, security
+patch `2026-10-01`. This differs from the attachment's Google `blazer` device.
+Neither existing dedicated app process was running. Installed diagnostic release
+versionCode `100000204` differs from the attachment. Read-only preflight acquired
+and renewed its exclusive lease, explicitly released it, confirmed broker idle,
+and removed its token; existing app data was untouched. These are preflight
+receipts, **not application-test passes**.
+
+The initial SDK37 absence report was corrected by Fleet: the installed platform
+directory is `android-37.0`, rather than `android-37`. No SDK installation was
+needed. Device fixture compilation and execution remain pending.
+
 ## Pending evidence and gates
 
 1. Fleet: refresh current source/device owner metadata and provide candidate
@@ -58,5 +110,5 @@ The historical Nov 5 APK is not assumed to match this attachment.
 6. Push only verified commits to the correct fork refs (module before root),
    with identity and remote-ref verification. No push while verification blocked.
 
-No device test, lock acquisition, upstream integration, fixed SHA, or remote
-push is claimed by this interim record.
+No application device-test pass, verified causal fix, or remote push is claimed
+by this interim record. Local whitespace checks pass in root and client.
