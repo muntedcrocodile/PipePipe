@@ -1,6 +1,7 @@
 # Playback during large subscription refresh: investigation
 
-Status: upstream integrated; reproduction fixture awaiting device run; no verified fix or push.
+Status: upstream integrated; bounded standalone fixture passes; actual MainActivity
+diagnostics in progress. Original ANR acceptance incomplete; no verified fix or push.
 
 ## Scope and starting source
 
@@ -131,7 +132,59 @@ window or embedded player UI. No review of an application fix is claimed.
 The first device harness attempt failed at its pre-install `pm path` probe because
 the fresh diagnostic package was absent (exit 1, empty output, retained session).
 No app test ran in that attempt. It explicitly released and confirmed idle;
-Fleet was asked to handle expected absence and retry. Execution results pending.
+Fleet handled expected absence and retried. Phase 1 completed:
+
+- Baseline standalone stress: **1/1 passed**, 90.239 seconds.
+- Integrated standalone stress: **1/1 passed**; its log verifies 1,000 distinct
+  subscriptions, 20,000 entries, 1,000 results, refresh elapsed 42,364 ms.
+- Integrated `FeedLoadIsolationTest`: **3/3 passed**.
+- Integrated `FeedRefreshRoutingTest`: **3/3 passed**.
+- Seventeen memory/thread samples per stress run. Baseline sampled maximum
+  meminfo RSS 541,884 KiB and PSS 385,105 KiB; integrated RSS 537,512 KiB and
+  PSS 379,968 KiB. Each reached 121 observed threads. These are sampled maxima,
+  not continuous peak measurements or a performance comparison.
+
+The original 6,867,632 KiB RSS and input ANR were **not reproduced before upstream**.
+Standalone fixture passes do not verify upstream resolution of the reported bug.
+
+Fleet's authoritative phase-1 completion session explicitly released successfully
+at `2026-11-11 09:31:36 UTC` (exit 0, `status:cleaning`), reached idle at
+`09:31:37 UTC`, and removed its token. Supported process queries confirmed no
+fresh task process/instrumentation remained; both fresh test packages were
+removed and absence confirmed. Earlier staging timeout/stale-release evidence
+is retained and is not used as explicit-release proof. Existing diagnostic and
+personal data were preserved. Sanitized Fleet receipts are in its scoped local
+task directory (`PHASE1-RECEIPT.md`, `explicit-release-quiescence-proof.json`).
+
+## Actual MainActivity continuation
+
+Same implementation owner continues; no extra implementation worker or review.
+Test-only client `0695e9de27` adds `MainActivityRefreshReproTest` and production
+queue-table initialization to the isolated Room callback. The next controlled
+scenario uses the actual MainActivity, VideoDetailFragment and PlayerService,
+the actual feed refresh button/service, five refresh cycles of 1,000 synthetic
+RSS subscriptions, injected swipe input during refresh, and feed/detail view
+recreation. It records Java/native memory and the main thread's stack on a
+heartbeat stall. This test must compile and execute before any result claim.
+RSS extraction remains a material limitation if the original user used full
+channel-tab extraction. No production behavior has been changed.
+
+Source retention/contention investigation so far:
+
+- `FeedLoadManager` buffers database writes by 20, then `toList()` retains all
+  `FeedUpdateInfo`/stream lists until completion and flattens them. This scales
+  with total extracted results even for foreground refresh, whose subscriber
+  discards the result. It is a measurable retention lead, **not the proven ANR
+  cause**. NotificationWorker separately needs new-stream results.
+- `FeedUpdateInfo` copies lightweight metadata instead of holding ChannelInfo,
+  while `InfoCache` bounds entries at 60. Full channel tabs can still carry
+  larger raw response payloads than synthetic RSS.
+- FeedViewModel throttles progress/database updates; feed queries limit visible
+  streams to 500. The UI and service lifecycle must be observed under repeated
+  refresh rather than inferred from standalone ExoPlayer.
+- Six extraction rails and scheduler switches bound extraction concurrency;
+  blocking network extraction and main-thread event delivery remain contention
+  leads. No app blocked stack has yet connected those leads to the original ANR.
 
 ## Pending evidence and gates
 
