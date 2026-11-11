@@ -69,12 +69,15 @@ disabled recursion. Remote server/device access remained exclusively with Fleet.
 
 ## Reproduction fixture
 
-Client `d99fc7ea97280314ac62976989126cbb44cdc4dd` adds tests only.
+Client fixture tip `4142337e4174f84ece07cc62f12e08c418341918` adds tests only
+(initial fixture commit `d99fc7ea97280314ac62976989126cbb44cdc4dd`).
 `SabrPlaybackSmokeTest#playbackDuringLargeSubscriptionRefresh` performs real
 online YouTube extraction and production SABR resolution, waits for decoded video
 and advancing audio, then invokes the production feed manager over 1,000 distinct
 synthetic RSS channels with 20 entries each. It asserts playback advances during
-refresh and successful results for every channel. All other downloader requests,
+refresh and successful results for every channel. A periodic main-looper
+heartbeat must be acknowledged within 1.5 seconds; all 20,000 distinct parsed
+entries and empty extraction-error lists are verified. All other downloader requests,
 including streaming SABR bodies, are delegated unchanged.
 
 The fixture refuses any application ID except `.queue.devicetest.refresh` and
@@ -93,7 +96,42 @@ receipts, **not application-test passes**.
 
 The initial SDK37 absence report was corrected by Fleet: the installed platform
 directory is `android-37.0`, rather than `android-37`. No SDK installation was
-needed. Device fixture compilation and execution remain pending.
+needed. Both baseline and integrated debug app/test APKs compiled successfully with:
+
+```bash
+bash ./gradlew --no-daemon --offline --console=plain --max-workers=2 \
+  -Dorg.gradle.jvmargs=-Xmx4g \
+  -DdebugPackageSuffix=.queue.devicetest.refresh \
+  :app:assembleDebug :app:assembleDebugAndroidTest
+```
+
+Baseline production source is `0a59c626` with test-only patch SHA-256
+`d7c06f84d40d7284830f82787aab782e3f4268a69bf7970f7850617c12e50d78`;
+integrated source is `4142337e`. Each build used 86 Gradle tasks, with no compile
+failure. Baseline production-only compilation also passed (19 tasks).
+These are compile results, not executed application tests.
+
+Package: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest.refresh`, ABI arm64,
+versionCode `111004`; debug certificate SHA-256
+`bfadb6be9109016e35054c9591542ffc14df0c360eb8d635b595b1716ae043ce`.
+
+| Build | App APK SHA-256 | Instrumentation APK SHA-256 |
+| --- | --- | --- |
+| Baseline | `9d7b1de3eadedeace5085e45dd1ededc9347f96069d022c3f476136ab998566e` | `8f04ca68f1b45acdfd3bae35c81b57d45db8a4d87c6eccaccf63c992117945a1` |
+| Integrated | `ff9632a28d4c48f9d49c3239aa67c311e02d77f3e096f7c0e95f08700c6179a6` | `1cb38c4555e0204d278365cb395d8986f465091a4826da57f9136157327986a5` |
+
+One independent read-only review found gaps in the initial fixture: net playback
+advancement could hide an input stall; parsed entry/error counts were unchecked;
+and cleanup could stop at the first exception. The reviewed follow-up adds a
+main-looper heartbeat, checks parsed results, and rolls back constructor failure
+with nested-finally restoration. Remaining limitation: playback uses standalone
+ExoPlayer/SurfaceTexture and does not recreate the original MainActivity input
+window or embedded player UI. No review of an application fix is claimed.
+
+The first device harness attempt failed at its pre-install `pm path` probe because
+the fresh diagnostic package was absent (exit 1, empty output, retained session).
+No app test ran in that attempt. It explicitly released and confirmed idle;
+Fleet was asked to handle expected absence and retry. Execution results pending.
 
 ## Pending evidence and gates
 
