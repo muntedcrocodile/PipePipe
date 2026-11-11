@@ -241,6 +241,41 @@ binding/updating in regular/grid/mini rows. The post-fix candidate also adds
 three tests for rebind/cancellation/error behavior. No execution result is claimed
 for these pending regressions. No new review or implementation owner was started.
 
+### Disk-backed reproduction and combined candidate
+
+The disk/FULL baseline also failed, with repeated main-thread stalls in
+`SQLiteConnectionPool.waitForConnection -> PersistentQueueStore.save ->
+PersistentPlayQueue.setRecovery -> checkpoint -> tick -> PlayerProgressController`.
+No cycle completed. Its 37 external samples reached meminfo RSS 725,096 KiB;
+the original multi-GiB memory profile remains unmatched. Later teardown produced
+`Receiver not registered` because the fixture stopped FeedLoadService after its
+success event but before its main-thread success callback. That later crash is
+separated from the earlier writer-wait stacks. The corrected harness waits for
+the real service to stop and excludes fresh-package onboarding/announcement UI.
+Fleet proved explicit release and live-target quiescence afterward.
+
+The three bounded row responsiveness tests failed before the change: mini 521 ms,
+regular 507 ms, grid 503 ms against a 250 ms limit. The row-only candidate passed
+those three tests. Its lifecycle/error tests initially passed 2/3: the test-created
+ProgressBar was indeterminate, unlike the real row layouts, so its setProgress
+assertion returned zero. Test `5a75619167` corrects that fixture condition; pending
+rerun results must not be inferred from this diagnosis.
+
+The combined candidate is client `5a75619167d120969f257de76749c7f3f8b7d700`.
+Production commit `a373007005` changes the feed writer lock scope from a batch
+of 20 independent channels to one channel at a time. Each channel's stream,
+subscription and timestamp changes remain atomic; the writer is released between
+channels so the durable player checkpoint can acquire it. This increases commit
+frequency, a throughput/battery tradeoff requiring stress validation. It combines
+with the asynchronous row-read fix; it does not rewrite queue durability or format.
+
+The captured row, feed-loader and queue-checkpoint source files are identical
+between baseline `0a59c626` and upstream-integrated `d115054f`; upstream integration
+alone did not change these contention paths. The final combined device run uses
+the same disk/FULL, 1,000-channel, 100-entry UI scenario for five cycles, with a
+bounded 360-second cycle deadline, then six row and six feed regression checks.
+Those final results and any verified-push acceptance remain pending.
+
 ## Pending evidence and gates
 
 1. Fleet: refresh current source/device owner metadata and provide candidate
