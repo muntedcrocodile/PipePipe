@@ -276,6 +276,43 @@ the same disk/FULL, 1,000-channel, 100-entry UI scenario for five cycles, with a
 bounded 360-second cycle deadline, then six row and six feed regression checks.
 Those final results and any verified-push acceptance remain pending.
 
+### Verification corrections and immutable app binary
+
+The first combined run completed cycle 1 with advancing playback/input/recreation
+and no retained `MAIN_STALL`, then failed a service-shutdown wait. Its chronology
+showed that a new BehaviorProcessor observer replayed the previous cycle's cached
+success before cycle 2 started. Test-only `c441268e36` now requires the current
+refresh's initial progress event before accepting success. It also tolerates an
+absent test database file when Room's lazy helper was never opened. The corrected
+UI-only retry is active; no complete five-cycle verdict is inferred yet.
+
+The helper checks accidentally received UI-only disk arguments in one run;
+those cleanup failures do not count as valid row results. Rerunning with the
+intended in-memory arguments preserved responsiveness **3/3 passed**, while the
+binder test remained **2/3** because the default circular widget style is
+indeterminate-only. Merely calling `setIndeterminate(false)` was insufficient.
+Test-only `d78aa788c4` constructs the horizontal determinate style and asserts
+that configuration before checking stale-result behavior. Its three checks still
+need a terminal pass and cannot be waived.
+
+The frozen production source compiled into ARM64 debug APK SHA-256
+`94b8790f532de6af49d1227f8b3b6b2d1d80a3d74a0f3b52c573d120404d96b4`.
+Fleet verified that this app APK is byte-identical for `5a756191` and `c441268e`;
+only the instrumentation APK changed. Production source is unchanged through the
+later test-only commits.
+
+The optimized release build succeeded in 4m 2s (56 Gradle tasks), with start/end
+client SHA both `5a75619167d120969f257de76749c7f3f8b7d700`. Its ARM64 APK SHA-256 is
+`4e10be7e8a85a4a733b7fdd719d7718238cf4e8b6d60eb6e0d9a1db1b1cb7626`.
+It is **unsigned**: no signing inputs were available in the scoped Fleet context.
+No APK was distributed, published or installed as a release validation step.
+
+Exactly one repro-detail question is pending in the owning coordinator: original
+approximate subscription count, fast/RSS setting, and playback resolution. The
+attachment and scoped evidence do not contain those facts. This is information
+for remaining fidelity work, not an approval request or a reason to pause the
+independent tests. No personal channel/video list or backup was requested.
+
 ## Pending evidence and gates
 
 1. Fleet: refresh current source/device owner metadata and provide candidate
