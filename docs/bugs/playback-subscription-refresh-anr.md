@@ -186,6 +186,45 @@ Source retention/contention investigation so far:
   blocking network extraction and main-thread event delivery remain contention
   leads. No app blocked stack has yet connected those leads to the original ANR.
 
+### Phase 2: actual UI stalls captured; original cause still unproven
+
+Actual-UI fixture `0695e9de27` compiled on both baseline and integrated snapshots.
+Only baseline production `0a59c626` was run. It failed its heartbeat assertion;
+the terminal runner then reported process crash. Captured main-thread stacks:
+
+- `20:42:52 +1100`: `StreamInfoItemHolder.updateFromItem:109` calls
+  `HistoryRecordManager.loadStreamState(...).blockingGet()` from RecyclerView
+  layout on the main thread, waiting on RxJava's BlockingMultiObserver latch.
+- `20:42:55 +1100`: `SQLiteConnectionPool.waitForConnection` /
+  `beginTransaction` / `PersistentQueueStore.save:61` /
+  `PersistentPlayQueue.commit` / `setRecovery` /
+  `PersistentQueuePlayerController.checkpoint:164` /
+  `PlayerSourceController.useVideoSource` during actual detail-view lifecycle work.
+
+This confirms real UI/database waiting paths during the controlled scenario.
+It does not establish the original attachment's exact blocked stack, which was
+not captured, or explain its 6.5 GiB RSS. The in-memory Room database has different
+connection/journal behavior from production, so disk-backed verification is needed
+before attributing these waits to the reported bug. Thirteen external samples
+recorded maximum meminfo RSS 694,724 KiB for this UI attempt.
+
+After the primary heartbeat failure, test teardown closed the synthetic Room
+database before asynchronous PlayerService destruction completed. Later closed-DB
+errors and the process-crash outcome are **fixture cleanup noise**, not proof of
+an application defect. Follow-up `c02102aeca` waits for active refresh completion,
+activity destruction and the actual player's disposal before closing Room.
+
+The next materially different baseline run uses `diskDatabase=true` and
+`entriesPerChannel=100`: a uniquely named test-only Room file, production
+`synchronous=FULL`, the queue-table callback, 1,000 distinct synthetic channels,
+and five actual UI refresh/input/lifecycle cycles. Its own database is deleted
+on close; no personal database is opened for the fixture. This remains RSS
+extraction and is not a full channel-tab fixture. The prior integrated UI variant
+is not rerun unchanged. Fleet must prove current-session explicit release and
+supported-query quiescence before this next test.
+
+No production-code change or causal-fix claim has been made at this stage.
+
 ## Pending evidence and gates
 
 1. Fleet: refresh current source/device owner metadata and provide candidate
