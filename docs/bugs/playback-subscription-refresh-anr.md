@@ -1,332 +1,203 @@
-# Playback during large subscription refresh: investigation
+# Playback during subscription refresh: verified contention fix
 
-Status: upstream integrated; bounded standalone fixture passes; actual MainActivity
-diagnostics in progress. Original ANR acceptance incomplete; no verified fix or push.
+The controlled MainActivity playback/refresh freeze was reproduced and the narrow
+fix passed device validation. **The original attachment's exact blocked stack and
+multi-GiB memory profile remain unconfirmed.** No claim is made that its memory
+cause was identified or that upstream alone resolved it.
 
-## Scope and starting source
+## Cause and change
 
-Dedicated test package: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest`.
-Reproduce playback concurrently with refresh of a genuinely large synthetic
-subscription list. Preserve personal apps, subscriptions, and watch history.
-Fleet owns remote collection and device tests; no overlapping device worker.
+The baseline main thread was captured waiting in two paths during real playback
+and a large refresh:
 
-Prepared worktree: `/home/user/.t3/fleet-dev-0.1.2/worktrees/PipePipe/t3-3d5de02e`.
+- RecyclerView layout -> `StreamInfoItemHolder.updateFromItem:109` ->
+  `HistoryRecordManager.loadStreamState(...).blockingGet()` -> RxJava latch.
+- Player progress/lifecycle -> `PersistentQueuePlayerController.checkpoint:164`
+  -> `PersistentPlayQueue.setRecovery` -> `PersistentQueueStore.save:61` ->
+  `SQLiteConnectionPool.waitForConnection`. Feed storage held the same database
+  writer across 20 independent channel updates.
+
+Video rows now load history asynchronously, cancel obsolete requests, reject stale
+results, and handle recycled/detached/cached-reattached views. Existing progress,
+duration, paid/live-row display and queue durability semantics are preserved.
+Feed storage now commits each channel atomically and releases the writer between
+channels. More frequent commits are a throughput/battery tradeoff; validation
+checks responsiveness and correctness, not a speed improvement.
+
+These captured row/feed/checkpoint source files were identical between production
+baseline `0a59c626` and upstream-integrated `d115054f`. Upstream integration alone
+did not change these contention paths. Queue format/checkpoint durability was not
+rewritten. No extractor implementation, unrelated feature or visual design changed.
+
+## Worktree and source provenance
+
+Worktree: `/home/user/.t3/fleet-dev-0.1.2/worktrees/PipePipe/t3-3d5de02e`.
 Root branch: `t3/fix-playback-subscription-refresh`.
-Root starting commit: `7f8d030f6f04ca97c95d57bddcf62cee3352433a`.
-Client starting gitlink: `da54421e6878aef59520e80b21dfb5539bcef530`.
-Extractor starting gitlink: `a1aa6841e7868c72c39bf119bf992dc83b5176b1`.
-Prepared extractor HEAD was already `28a1a5ee889fadb36a435c43e0bc9483b59bb3bf`,
-with an empty worktree and staged deletions. This pre-existing state was preserved.
-Client was initially uninitialized, then cloned from the local original client
-repository into this worktree on `fix/playback-subscription-refresh` at its
-starting gitlink. The original checkout was not changed.
+Client branch: `fix/playback-subscription-refresh`.
 
-## Attachment evidence (sanitized)
+| Source | Revision |
+| --- | --- |
+| Local root before work | `7f8d030f6f04ca97c95d57bddcf62cee3352433a` |
+| Local client before work | `da54421e6878aef59520e80b21dfb5539bcef530` |
+| Current fork / inferred report root | `88d69d469361a930fe6304e4db202797f295f691` |
+| Current fork / inferred report client | `0a59c6264a4746efad9d98a5353efab4dab5bc3a` |
+| Fetched upstream root | `3fd38c6dbdfa1d29c97d9d5b1344836347793ec3` |
+| Fetched upstream client | `118ffc86baa811edae4d5659bbba7835f8ba6a92` |
+| Integrated root merge | `44dd8a28a13d2c80b17f44d466ebbd55f7f2059c` |
+| Integrated client before fix | `d115054f4716b142950e9a7dbce009935f02f4a9` |
+| Latest collected extractor / final gitlink | `28a1a5ee889fadb36a435c43e0bc9483b59bb3bf` |
+| Final client including regressions | `d78aa788c4cae92fe57a44687174881d6fa3b1ff` |
 
-Private attachment original name: `Error in PipePipe .queue.devicetest 272d2de259c9.txt`.
-Raw attachment is not committed or copied into this repository. SHA-256:
-`596f738cd4a05e45ce17244f1515407f0d7e151d0dc0c2b7661ae38c129eace8`.
+Fleet fetched source and provided local bundles; integration used merges, without
+reset, rebase or history rewrite. The upstream root was already an ancestor of the
+current fork root. Client integration preserved fork features and merged cleanly.
+The original client checkout was untouched. The prepared extractor already had
+HEAD `28a1a5e`, an empty worktree and staged deletions, versus starting root gitlink
+`a1aa6841e7868c72c39bf119bf992dc83b5176b1`; that pre-existing state was preserved.
+No vendor push is required. One initial local root-bundle import unexpectedly
+triggered a read-only recursive GitHub client fetch; subsequent imports explicitly
+disabled recursive fetching. Server/device access remained exclusively with Fleet.
 
-- Lines 1–15: ANR, versionCode `100000304`, target SDK 36. Input dispatch
-  timeout after 5,000 ms waiting for `FocusEvent(hasFocus=false)`.
-- Lines 19–32: earlier input timeout for a MotionEvent, another process PID,
-  approximately 218 seconds before this event.
-- Lines 11–14: RSS 6,867,632 KiB, high-water RSS 7,782,760 KiB,
-  anonymous RSS 6,652,484 KiB. These establish severe memory use, not its cause.
-- Lines 34–388: target PID 23166; initial collection at
-  `2026-11-11 19:52:21 +1100`. Tombstoned reports failure at line 39 and
-  a failed status response at line 242. Only waiting-channel entries with
-  `ptrace_stop` appear for the app; **there is no app Java stack trace**.
-- Lines 18641–18648: ANR summary confirms the target activity and timeout.
-  Stacks from other processes elsewhere in the attachment are not app stacks.
-
-The filename's abbreviated revision is a provenance lead, not verified source
-identity. Candidate `272d2de259c9` is absent from the local client object store.
-The historical Nov 5 APK is not assumed to match this attachment.
-
-## Source synchronization
-
-Fleet fetched current remote source and supplied local bundles. Current fork root
-`88d69d469361a930fe6304e4db202797f295f691` was merged without rewriting history,
-yielding root `44dd8a28a13d2c80b17f44d466ebbd55f7f2059c`.
-Latest upstream root `3fd38c6dbdfa1d29c97d9d5b1344836347793ec3` is already an
-ancestor of that fork root. Client advanced to current fork
-`0a59c6264a4746efad9d98a5353efab4dab5bc3a`, then merged latest upstream
-`118ffc86baa811edae4d5659bbba7835f8ba6a92`, yielding
-`d115054f4716b142950e9a7dbce009935f02f4a9`. No merge conflicts.
-Extractor origin main remains `28a1a5ee889fadb36a435c43e0bc9483b59bb3bf`;
-the newer fork root already pins that revision.
-
-Release metadata for `v5.5.1000003` matches the attachment's versionCode, package,
-and target ABI and points to root `88d69d4` / client `0a59c626` / extractor
-`28a1a5e`. Its arm64 APK hash is
+The original filename suffix `272d2de259c9` did not resolve to a scoped source ref
+or APK inventory hash. Release `v5.5.1000003` matches versionCode `100000304` and maps
+to the fork revisions above; its ARM64 APK hash is
 `d54822461699e895a0e9a7ceff4b765a5ab8aa5bd959bcf7ea4e61b344f7f843`.
-This is a source-provenance inference from matching version metadata, not a hash
-match to the original failing APK. The filename suffix remains unresolved.
+That association is inferred from version metadata, not verified against original
+APK bytes. The historical Nov 5 APK was not used as the failing baseline.
 
-One initial local root-bundle import unexpectedly triggered Git's recursive
-client fetch from GitHub. It was read-only; subsequent bundle imports explicitly
-disabled recursion. Remote server/device access remained exclusively with Fleet.
+## Sanitized original evidence
 
-## Reproduction fixture
+Private attachment: `Error in PipePipe .queue.devicetest 272d2de259c9.txt`,
+1,260,888 bytes; SHA-256
+`596f738cd4a05e45ce17244f1515407f0d7e151d0dc0c2b7661ae38c129eace8`.
+Raw logs were not copied into this repository or published.
 
-Client fixture tip `4142337e4174f84ece07cc62f12e08c418341918` adds tests only
-(initial fixture commit `d99fc7ea97280314ac62976989126cbb44cdc4dd`).
-`SabrPlaybackSmokeTest#playbackDuringLargeSubscriptionRefresh` performs real
-online YouTube extraction and production SABR resolution, waits for decoded video
-and advancing audio, then invokes the production feed manager over 1,000 distinct
-synthetic RSS channels with 20 entries each. It asserts playback advances during
-refresh and successful results for every channel. A periodic main-looper
-heartbeat must be acknowledged within 1.5 seconds; all 20,000 distinct parsed
-entries and empty extraction-error lists are verified. All other downloader requests,
-including streaming SABR bodies, are delegated unchanged.
+- Lines 1-15: ANR in `InfinityLoop1309.NewPipeEnhanced.queue.devicetest`, target
+  SDK 36, versionCode `100000304`, 5,000 ms input timeout for
+  `FocusEvent(hasFocus=false)`. RSS 6,867,632 KiB; high-water RSS 7,782,760 KiB.
+- Lines 19-32: earlier MotionEvent ANR in another PID, about 218 seconds earlier.
+- Lines 34-388: target PID 23166, initial collection at
+  `2026-11-11 19:52:21 +1100`. Tombstoned failures at lines 39 and 242; only
+  waiting-channel `ptrace_stop` entries, **no app Java stack**.
+- Lines 18641-18648: target activity and input-timeout summary. Other processes'
+  stacks elsewhere in the attachment were not treated as app stacks.
 
-The fixture refuses any application ID except `.queue.devicetest.refresh` and
-uses an in-memory Room database, restoring the previous singleton, downloader,
-and changed RSS preference afterward. It does not load personal subscription
-data. This exercises dedicated RSS extraction, not full channel-tab extraction,
-and cannot by itself prove the original ANR's cause or resolution.
+## Device scenario and results
 
-Fleet preflight found Samsung SM-G960F (`starlte`), Android 17 / API 37, security
-patch `2026-10-01`. This differs from the attachment's Google `blazer` device.
-Neither existing dedicated app process was running. Installed diagnostic release
-versionCode `100000204` differs from the attachment. Read-only preflight acquired
-and renewed its exclusive lease, explicitly released it, confirmed broker idle,
-and removed its token; existing app data was untouched. These are preflight
-receipts, **not application-test passes**.
+Fleet was the sole remote/device operator. No duplicate app worker or phone lease
+was started. Device: Samsung SM-G960F (`starlte`), Android 17 / API 37, security
+patch `2026-10-01`; this differs from the attachment's Google `blazer` hardware.
+The installed old diagnostic APK was not used as source provenance.
 
-The initial SDK37 absence report was corrected by Fleet: the installed platform
-directory is `android-37.0`, rather than `android-37`. No SDK installation was
-needed. Both baseline and integrated debug app/test APKs compiled successfully with:
+Fresh packages: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest.refresh` and
+`.refresh.test`. Existing diagnostic/personal packages, subscriptions and history
+were not replaced, cleared or used. The fixture creates 1,000 distinct synthetic
+subscription identities, supplies 100 RSS entries each, and uses a uniquely named
+Room file with production `synchronous=FULL` and the production queue-table
+callback. It deletes its own database and restores changed preferences/globals.
+
+The final test uses actual MainActivity -> VideoDetailFragment -> PlayerService,
+real online YouTube/SABR playback, the real feed refresh button/service, injected
+swipe input and feed/detail view recreation. Five refresh cycles each assert 1,000
+current requests, successful completion, advancing playback and heartbeat checks.
+Fresh-package onboarding/announcement dialogs are excluded to model a returning
+user. This is synthetic **RSS**, not a full channel-tab extraction fixture.
+
+| Check | Result |
+| --- | --- |
+| Early standalone playback/RSS baseline and integrated probes | 1/1 each; negative original reproduction, not acceptance |
+| Actual UI in-memory baseline | Main-thread row-read and checkpoint stalls captured |
+| Actual UI disk/FULL baseline, 100 entries/channel | Repeated main-thread checkpoint writer waits; no completed cycle |
+| Delayed history regressions before fix | 3 expected failures: mini 521 ms, regular 507 ms, grid 503 ms against 250 ms bound |
+| Fixed row responsiveness | 3/3 passed |
+| Fixed stale-result/recycle/error behavior | 3/3 passed |
+| Fixed actual UI, disk/FULL, five current cycles | 1/1 passed; JUnit 1,493.053 seconds; 5,000 RSS requests |
+| Fixed feed isolation and refresh routing | 3/3 + 3/3 passed |
+| Debug app/instrumentation compilation | Passed, 86 Gradle tasks |
+| Optimized release compilation | Passed, 56 tasks, 4m 2s; unsigned, not distributed |
+
+The final UI run used `c441268e36d0274134f694567a4cfd816098c4a7`; final binder
+checks used `d78aa788c4cae92fe57a44687174881d6fa3b1ff`. Production app source and
+ARM64 app bytes are identical to `5a75619167d120969f257de76749c7f3f8b7d700`, which
+also passed the feed/responsiveness checks and release compilation. Only Android
+instrumentation files changed afterward. No unchanged broad suite was rerun.
+
+The UI run collected 257 external samples and 43 bounded rolling log chunks.
+Sampled maximum RSS was 729,856 KiB, PSS 550,902 KiB; observed VmHWM 797,816 KiB,
+maximum 150 threads. These are sampled observations, not continuous peaks or a
+controlled performance verdict. Heartbeat assertions passed at the 1,500 ms test
+threshold; retained logs had zero `MAIN_STALL` markers. One cycle log timestamp
+was absent from bounded captures, so elapsed times across that gap are not claimed.
+The original multi-GiB profile was not recreated.
+
+## Commands and immutable artifacts
+
+Host build (Bash, isolated server1 snapshots):
 
 ```bash
 bash ./gradlew --no-daemon --offline --console=plain --max-workers=2 \
-  -Dorg.gradle.jvmargs=-Xmx4g \
-  -DdebugPackageSuffix=.queue.devicetest.refresh \
+  -Dorg.gradle.jvmargs=-Xmx4g -DdebugPackageSuffix=.queue.devicetest.refresh \
   :app:assembleDebug :app:assembleDebugAndroidTest
+bash ./gradlew --no-daemon --offline --console=plain --max-workers=2 \
+  -Dorg.gradle.jvmargs=-Xmx4g -DpackageSuffix=.queue.devicetest.refresh \
+  :app:assembleRelease
 ```
 
-Baseline production source is `0a59c626` with test-only patch SHA-256
-`d7c06f84d40d7284830f82787aab782e3f4268a69bf7970f7850617c12e50d78`;
-integrated source is `4142337e`. Each build used 86 Gradle tasks, with no compile
-failure. Baseline production-only compilation also passed (19 tasks).
-These are compile results, not executed application tests.
+Fleet launched instrumentation through the installed ForkKeeper broker under its
+exclusive renewable lease. UI selector:
+`org.schabi.newpipe.local.feed.service.MainActivityRefreshReproTest#actualPlayerAndFeedRepeatedRefreshWithInputAndViewRecreation`.
+Arguments: `diskDatabase=true entriesPerChannel=100 cycleTimeoutSeconds=600`;
+bounded host runner 4,000 seconds. Row tests used default in-memory arguments:
+`org.schabi.newpipe.info_list.holder.StreamRowHistoryResponsivenessTest` and
+`org.schabi.newpipe.info_list.holder.StreamProgressBinderTest`. Feed selectors:
+`org.schabi.newpipe.local.feed.service.FeedLoadIsolationTest` and
+`org.schabi.newpipe.local.feed.service.FeedRefreshRoutingTest`.
 
-Package: `InfinityLoop1309.NewPipeEnhanced.queue.devicetest.refresh`, ABI arm64,
-versionCode `111004`; debug certificate SHA-256
-`bfadb6be9109016e35054c9591542ffc14df0c360eb8d635b595b1716ae043ce`.
+ARM64 debug package versionCode `111004`, versionName `5.5.0`; debug certificate
+SHA-256 `bfadb6be9109016e35054c9591542ffc14df0c360eb8d635b595b1716ae043ce`.
 
-| Build | App APK SHA-256 | Instrumentation APK SHA-256 |
-| --- | --- | --- |
-| Baseline | `9d7b1de3eadedeace5085e45dd1ededc9347f96069d022c3f476136ab998566e` | `8f04ca68f1b45acdfd3bae35c81b57d45db8a4d87c6eccaccf63c992117945a1` |
-| Integrated | `ff9632a28d4c48f9d49c3239aa67c311e02d77f3e096f7c0e95f08700c6179a6` | `1cb38c4555e0204d278365cb395d8986f465091a4826da57f9136157327986a5` |
+| Artifact | SHA-256 |
+| --- | --- |
+| Baseline ARM64 debug app | `9d7b1de3eadedeace5085e45dd1ededc9347f96069d022c3f476136ab998566e` |
+| Verified ARM64 debug app | `94b8790f532de6af49d1227f8b3b6b2d1d80a3d74a0f3b52c573d120404d96b4` |
+| Final d78 instrumentation APK | `1a62ee5fa434810a86d0ee8e5c0402ef8f97a0f2803afd7ea32d60ee0b09a585` |
+| Optimized ARM64 release, unsigned | `4e10be7e8a85a4a733b7fdd719d7718238cf4e8b6d60eb6e0d9a1db1b1cb7626` |
 
-One independent read-only review found gaps in the initial fixture: net playback
-advancement could hide an input stall; parsed entry/error counts were unchecked;
-and cleanup could stop at the first exception. The reviewed follow-up adds a
-main-looper heartbeat, checks parsed results, and rolls back constructor failure
-with nested-finally restoration. Remaining limitation: playback uses standalone
-ExoPlayer/SurfaceTexture and does not recreate the original MainActivity input
-window or embedded player UI. No review of an application fix is claimed.
+The d78 debug build started/ended at d78 with a clean source tree; the separately
+timestamped post-build readback confirms it. Release start/end were both 5a.
+No signing material was available in scoped Fleet configuration; no key was
+created and no unsigned APK was published, delivered or installed.
 
-The first device harness attempt failed at its pre-install `pm path` probe because
-the fresh diagnostic package was absent (exit 1, empty output, retained session).
-No app test ran in that attempt. It explicitly released and confirmed idle;
-Fleet handled expected absence and retried. Phase 1 completed:
+## Cleanup, review and remaining limits
 
-- Baseline standalone stress: **1/1 passed**, 90.239 seconds.
-- Integrated standalone stress: **1/1 passed**; its log verifies 1,000 distinct
-  subscriptions, 20,000 entries, 1,000 results, refresh elapsed 42,364 ms.
-- Integrated `FeedLoadIsolationTest`: **3/3 passed**.
-- Integrated `FeedRefreshRoutingTest`: **3/3 passed**.
-- Seventeen memory/thread samples per stress run. Baseline sampled maximum
-  meminfo RSS 541,884 KiB and PSS 385,105 KiB; integrated RSS 537,512 KiB and
-  PSS 379,968 KiB. Each reached 121 observed threads. These are sampled maxima,
-  not continuous peak measurements or a performance comparison.
+Final UI session `b50c5e95d4863f277ca2f70fa928b8eb` and final binder session
+`4d2ca1f61fa67786b69a1003ed230bf5` explicitly released successfully, reached idle,
+and removed tokens. Supported queries verified no fresh target process/subprocess
+or active instrumentation; both fresh packages were removed and absence checked.
+Existing apps/data were preserved. Saved acquire/renew/release operations, source
+and APK provenance are in Fleet's scoped
+`local/tasks/pipepipe-playback-refresh-20261111/main-ui/final-handoff/` receipts.
+No device lease is held after testing.
 
-The original 6,867,632 KiB RSS and input ANR were **not reproduced before upstream**.
-Standalone fixture passes do not verify upstream resolution of the reported bug.
+Earlier failed package-existence probes/staging timeout/stale release were not
+used as final cleanup proof. Fixture-only failures (premature Room/service teardown,
+cached success replay, accidental UI arguments in helper checks, and circular
+indeterminate-only progress widget) were corrected and their failed outcomes
+retained. They were not reported as application causes or waived passes.
 
-Fleet's authoritative phase-1 completion session explicitly released successfully
-at `2026-11-11 09:31:36 UTC` (exit 0, `status:cleaning`), reached idle at
-`09:31:37 UTC`, and removed its token. Supported process queries confirmed no
-fresh task process/instrumentation remained; both fresh test packages were
-removed and absence confirmed. Earlier staging timeout/stale-release evidence
-is retained and is not used as explicit-release proof. Existing diagnostic and
-personal data were preserved. Sanitized Fleet receipts are in its scoped local
-task directory (`PHASE1-RECEIPT.md`, `explicit-release-quiescence-proof.json`).
+One independent read-only review covered the initial reproduction fixture; its
+responsiveness/count/cleanup findings were addressed. No second reviewer or
+implementation owner was started. Final production changes were self-reviewed
+and validated by the scoped checks above.
 
-## Actual MainActivity continuation
+One repro-detail question remains pending through the owning coordinator: original
+approximate subscription count, fast/RSS setting and playback resolution. It is
+not an approval request. The actual attachment's bytes/source association and
+Google-device memory behavior remain limits on linking this verified contention
+fix to every aspect of that report.
 
-Same implementation owner continues; no extra implementation worker or review.
-Test-only client `0695e9de27` adds `MainActivityRefreshReproTest` and production
-queue-table initialization to the isolated Room callback. The next controlled
-scenario uses the actual MainActivity, VideoDetailFragment and PlayerService,
-the actual feed refresh button/service, five refresh cycles of 1,000 synthetic
-RSS subscriptions, injected swipe input during refresh, and feed/detail view
-recreation. It records Java/native memory and the main thread's stack on a
-heartbeat stall. This test must compile and execute before any result claim.
-RSS extraction remains a material limitation if the original user used full
-channel-tab extraction. No production behavior has been changed.
-
-Source retention/contention investigation so far:
-
-- `FeedLoadManager` buffers database writes by 20, then `toList()` retains all
-  `FeedUpdateInfo`/stream lists until completion and flattens them. This scales
-  with total extracted results even for foreground refresh, whose subscriber
-  discards the result. It is a measurable retention lead, **not the proven ANR
-  cause**. NotificationWorker separately needs new-stream results.
-- `FeedUpdateInfo` copies lightweight metadata instead of holding ChannelInfo,
-  while `InfoCache` bounds entries at 60. Full channel tabs can still carry
-  larger raw response payloads than synthetic RSS.
-- FeedViewModel throttles progress/database updates; feed queries limit visible
-  streams to 500. The UI and service lifecycle must be observed under repeated
-  refresh rather than inferred from standalone ExoPlayer.
-- Six extraction rails and scheduler switches bound extraction concurrency;
-  blocking network extraction and main-thread event delivery remain contention
-  leads. No app blocked stack has yet connected those leads to the original ANR.
-
-### Phase 2: actual UI stalls captured; original cause still unproven
-
-Actual-UI fixture `0695e9de27` compiled on both baseline and integrated snapshots.
-Only baseline production `0a59c626` was run. It failed its heartbeat assertion;
-the terminal runner then reported process crash. Captured main-thread stacks:
-
-- `20:42:52 +1100`: `StreamInfoItemHolder.updateFromItem:109` calls
-  `HistoryRecordManager.loadStreamState(...).blockingGet()` from RecyclerView
-  layout on the main thread, waiting on RxJava's BlockingMultiObserver latch.
-- `20:42:55 +1100`: `SQLiteConnectionPool.waitForConnection` /
-  `beginTransaction` / `PersistentQueueStore.save:61` /
-  `PersistentPlayQueue.commit` / `setRecovery` /
-  `PersistentQueuePlayerController.checkpoint:164` /
-  `PlayerSourceController.useVideoSource` during actual detail-view lifecycle work.
-
-This confirms real UI/database waiting paths during the controlled scenario.
-It does not establish the original attachment's exact blocked stack, which was
-not captured, or explain its 6.5 GiB RSS. The in-memory Room database has different
-connection/journal behavior from production, so disk-backed verification is needed
-before attributing these waits to the reported bug. Thirteen external samples
-recorded maximum meminfo RSS 694,724 KiB for this UI attempt.
-
-After the primary heartbeat failure, test teardown closed the synthetic Room
-database before asynchronous PlayerService destruction completed. Later closed-DB
-errors and the process-crash outcome are **fixture cleanup noise**, not proof of
-an application defect. Follow-up `c02102aeca` waits for active refresh completion,
-activity destruction and the actual player's disposal before closing Room.
-
-The next materially different baseline run uses `diskDatabase=true` and
-`entriesPerChannel=100`: a uniquely named test-only Room file, production
-`synchronous=FULL`, the queue-table callback, 1,000 distinct synthetic channels,
-and five actual UI refresh/input/lifecycle cycles. Its own database is deleted
-on close; no personal database is opened for the fixture. This remains RSS
-extraction and is not a full channel-tab fixture. The prior integrated UI variant
-is not rerun unchanged. Fleet must prove current-session explicit release and
-supported-query quiescence before this next test.
-
-### Narrow row-read candidate (not yet verified)
-
-Client candidate `1af055f18c2036e514e26d1fc7d348b6cce66abf` includes production
-commit `8948dae795`: regular/grid/card/mini video row binding and history updates
-use asynchronous history queries instead of `blockingGet()` on the main thread.
-The shared progress binder cancels queries on rebind/recycle/detach, rejects stale
-results by generation, and reloads cached holders reattached without rebinding.
-Existing duration/membership/live-row display conditions are preserved.
-
-The captured row-read wait motivates this candidate; it is **not a verified fix
-for the original ANR**. Queue checkpoint writes and refresh batching are unchanged.
-The disk-backed baseline and causal before/after checks remain required.
-
-Test-only `45062ba042` adds three bounded fail-before tests for delayed history
-binding/updating in regular/grid/mini rows. The post-fix candidate also adds
-three tests for rebind/cancellation/error behavior. No execution result is claimed
-for these pending regressions. No new review or implementation owner was started.
-
-### Disk-backed reproduction and combined candidate
-
-The disk/FULL baseline also failed, with repeated main-thread stalls in
-`SQLiteConnectionPool.waitForConnection -> PersistentQueueStore.save ->
-PersistentPlayQueue.setRecovery -> checkpoint -> tick -> PlayerProgressController`.
-No cycle completed. Its 37 external samples reached meminfo RSS 725,096 KiB;
-the original multi-GiB memory profile remains unmatched. Later teardown produced
-`Receiver not registered` because the fixture stopped FeedLoadService after its
-success event but before its main-thread success callback. That later crash is
-separated from the earlier writer-wait stacks. The corrected harness waits for
-the real service to stop and excludes fresh-package onboarding/announcement UI.
-Fleet proved explicit release and live-target quiescence afterward.
-
-The three bounded row responsiveness tests failed before the change: mini 521 ms,
-regular 507 ms, grid 503 ms against a 250 ms limit. The row-only candidate passed
-those three tests. Its lifecycle/error tests initially passed 2/3: the test-created
-ProgressBar was indeterminate, unlike the real row layouts, so its setProgress
-assertion returned zero. Test `5a75619167` corrects that fixture condition; pending
-rerun results must not be inferred from this diagnosis.
-
-The combined candidate is client `5a75619167d120969f257de76749c7f3f8b7d700`.
-Production commit `a373007005` changes the feed writer lock scope from a batch
-of 20 independent channels to one channel at a time. Each channel's stream,
-subscription and timestamp changes remain atomic; the writer is released between
-channels so the durable player checkpoint can acquire it. This increases commit
-frequency, a throughput/battery tradeoff requiring stress validation. It combines
-with the asynchronous row-read fix; it does not rewrite queue durability or format.
-
-The captured row, feed-loader and queue-checkpoint source files are identical
-between baseline `0a59c626` and upstream-integrated `d115054f`; upstream integration
-alone did not change these contention paths. The final combined device run uses
-the same disk/FULL, 1,000-channel, 100-entry UI scenario for five cycles, with a
-bounded 360-second cycle deadline, then six row and six feed regression checks.
-Those final results and any verified-push acceptance remain pending.
-
-### Verification corrections and immutable app binary
-
-The first combined run completed cycle 1 with advancing playback/input/recreation
-and no retained `MAIN_STALL`, then failed a service-shutdown wait. Its chronology
-showed that a new BehaviorProcessor observer replayed the previous cycle's cached
-success before cycle 2 started. Test-only `c441268e36` now requires the current
-refresh's initial progress event before accepting success. It also tolerates an
-absent test database file when Room's lazy helper was never opened. The corrected
-UI-only retry is active; no complete five-cycle verdict is inferred yet.
-
-The helper checks accidentally received UI-only disk arguments in one run;
-those cleanup failures do not count as valid row results. Rerunning with the
-intended in-memory arguments preserved responsiveness **3/3 passed**, while the
-binder test remained **2/3** because the default circular widget style is
-indeterminate-only. Merely calling `setIndeterminate(false)` was insufficient.
-Test-only `d78aa788c4` constructs the horizontal determinate style and asserts
-that configuration before checking stale-result behavior. Its three checks still
-need a terminal pass and cannot be waived.
-
-The frozen production source compiled into ARM64 debug APK SHA-256
-`94b8790f532de6af49d1227f8b3b6b2d1d80a3d74a0f3b52c573d120404d96b4`.
-Fleet verified that this app APK is byte-identical for `5a756191` and `c441268e`;
-only the instrumentation APK changed. Production source is unchanged through the
-later test-only commits.
-
-The optimized release build succeeded in 4m 2s (56 Gradle tasks), with start/end
-client SHA both `5a75619167d120969f257de76749c7f3f8b7d700`. Its ARM64 APK SHA-256 is
-`4e10be7e8a85a4a733b7fdd719d7718238cf4e8b6d60eb6e0d9a1db1b1cb7626`.
-It is **unsigned**: no signing inputs were available in the scoped Fleet context.
-No APK was distributed, published or installed as a release validation step.
-
-Exactly one repro-detail question is pending in the owning coordinator: original
-approximate subscription count, fast/RSS setting, and playback resolution. The
-attachment and scoped evidence do not contain those facts. This is information
-for remaining fidelity work, not an approval request or a reason to pause the
-independent tests. No personal channel/video list or backup was requested.
-
-## Pending evidence and gates
-
-1. Fleet: refresh current source/device owner metadata and provide candidate
-   provenance plus latest fork/upstream root, client, and extractor source.
-2. Record upstream SHAs and integrate into isolated branches without losing
-   fork features. Reproduce before integration where feasible, then retest.
-3. Collect target thread/memory evidence during playback and large refresh.
-   Result retention and extraction concurrency are investigation leads only.
-4. Make a causal fix if still needed, with a meaningful regression test.
-5. Fleet: verify on actual device using the current broker skill, renewable
-   exclusive lock, serialized commands, reversible synthetic dataset; record
-   device, APK/source hashes, results, cleanup, lock release and quiescence.
-6. Push only verified commits to the correct fork refs (module before root),
-   with identity and remote-ref verification. No push while verification blocked.
-
-No application device-test pass, verified causal fix, or remote push is claimed
-by this interim record. Local whitespace checks pass in root and client.
+Fork publication targets are client `fix/playback-subscription-refresh` and root
+`t3/fix-playback-subscription-refresh`, module first, root gitlink second. GitHub
+login was verified as `muntedcrocodile`; both refs were absent at preflight. No
+main/upstream/vendor branch, PR, release publication, Matrix or APK delivery is
+part of this change. Exact final pushed refs are verified separately by Fleet.
