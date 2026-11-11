@@ -223,7 +223,23 @@ extraction and is not a full channel-tab fixture. The prior integrated UI varian
 is not rerun unchanged. Fleet must prove current-session explicit release and
 supported-query quiescence before this next test.
 
-No production-code change or causal-fix claim has been made at this stage.
+### Narrow row-read candidate (not yet verified)
+
+Client candidate `1af055f18c2036e514e26d1fc7d348b6cce66abf` includes production
+commit `8948dae795`: regular/grid/card/mini video row binding and history updates
+use asynchronous history queries instead of `blockingGet()` on the main thread.
+The shared progress binder cancels queries on rebind/recycle/detach, rejects stale
+results by generation, and reloads cached holders reattached without rebinding.
+Existing duration/membership/live-row display conditions are preserved.
+
+The captured row-read wait motivates this candidate; it is **not a verified fix
+for the original ANR**. Queue checkpoint writes and refresh batching are unchanged.
+The disk-backed baseline and causal before/after checks remain required.
+
+Test-only `45062ba042` adds three bounded fail-before tests for delayed history
+binding/updating in regular/grid/mini rows. The post-fix candidate also adds
+three tests for rebind/cancellation/error behavior. No execution result is claimed
+for these pending regressions. No new review or implementation owner was started.
 
 ## Pending evidence and gates
 
