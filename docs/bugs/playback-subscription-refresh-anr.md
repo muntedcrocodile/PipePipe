@@ -190,11 +190,11 @@ responsiveness/count/cleanup findings were addressed. No second reviewer or
 implementation owner was started. Final production changes were self-reviewed
 and validated by the scoped checks above.
 
-One repro-detail question remains pending through the owning coordinator: original
-approximate subscription count, fast/RSS setting and playback resolution. It is
-not an approval request. The actual attachment's bytes/source association and
-Google-device memory behavior remain limits on linking this verified contention
-fix to every aspect of that report.
+The user subsequently answered: about 450 subscriptions, fast/RSS disabled and
+1080p playback, with whole-phone slowdown and occasional launcher crashes. See
+[the full-extraction continuation](full-extraction-refresh-memory.md). The actual
+attachment's bytes/source association and Google-device memory behavior remain
+limits on linking this verified contention fix to every aspect of that report.
 
 Fork publication targets are client `fix/playback-subscription-refresh` and root
 `t3/fix-playback-subscription-refresh`, module first, root gitlink second. GitHub
