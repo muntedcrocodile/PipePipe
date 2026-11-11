@@ -1,0 +1,164 @@
+name: Fork signed release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Signing/building never needs repository write access.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: >-
+      github.repository == 'muntedcrocodile/PipePipe' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      version_name: ${{ steps.version.outputs.version_name }}
+      artifact_name: ${{ steps.version.outputs.artifact_name }}
+    steps:
+      - name: Check out the triggering root commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Initialize only the pinned build submodules
+        run: |
+          set -euo pipefail
+          # Do not follow .gitmodules branch hints or initialize the unrelated wiki.
+          git submodule update --init --recursive --checkout -- PipePipeClient PipePipeExtractor
+          git submodule status --recursive -- PipePipeClient PipePipeExtractor > "$RUNNER_TEMP/fork-release-submodules.txt"
+          if grep -q '^[^ ]' "$RUNNER_TEMP/fork-release-submodules.txt"; then
+            echo 'A build submodule is uninitialized, conflicted, or differs from its recorded commit.' >&2
+            exit 1
+          fi
+
+      - name: Allocate this run's version
+        id: version
+        run: |
+          set -euo pipefail
+          # Keep this offset and workflow identity stable after the first release.
+          base=$((1000000 + GITHUB_RUN_NUMBER))
+          if (( base < 1000001 || base > 20999999 )); then
+            echo 'Version allocation exceeds the Android version-code budget.' >&2
+            exit 1
+          fi
+          version_name=$(python3 scripts/fork-release-verify.py --version-name "$base")
+          {
+            echo "version_code=$base"
+            echo "version_name=$version_name"
+            echo "tag=v$version_name"
+            echo "artifact_name=fork-release-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate both Gradle wrappers before executing them
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          min-wrapper-count: '2'
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install SDK 37 and verification tools
+        run: |
+          set -euo pipefail
+          # Google's SDK catalog names API 37's base platform android-37.0.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;37.0.0'
+
+      - name: Build signed R8 release APKs
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          FORK_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          FORK_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: bash scripts/fork-release-build.sh
+
+      - name: Verify APK identities, versions, ABIs, signatures, and R8 output
+        env:
+          FORK_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          FORK_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          FORK_RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: python3 scripts/fork-release-verify.py
+
+      - name: Retain verified APKs and checksums
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.version.outputs.artifact_name }}
+          path: fork-release-dist/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0 # APKs are already compressed.
+
+  publish:
+    needs: build
+    if: >-
+      github.repository == 'muntedcrocodile/PipePipe' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Queue publication only; builds for different pushes are never superseded.
+    # GitHub supports up to 100 pending publishers with queue: max.
+    concurrency:
+      group: fork-release-publish
+      queue: max
+    steps:
+      - name: Download this run's verified files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          # Keep the producing build's attempt when rerunning only a failed publisher.
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: fork-release-dist
+
+      - name: Publish a fresh public GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_BASE: ${{ needs.build.outputs.version_code }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version_name }}
+        working-directory: fork-release-dist
+        run: |
+          set -euo pipefail
+          sha256sum --check SHA256SUMS
+          # Fail on API errors instead of treating an inaccessible repo as empty.
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq '.[].tag_name' > "$RUNNER_TEMP/fork-release-tags.txt"
+          if grep -Fxq "$RELEASE_TAG" "$RUNNER_TEMP/fork-release-tags.txt"; then
+            echo 'This run already has a release. Dispatch a new run for a new version.' >&2
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/matching-refs/tags/$RELEASE_TAG" \
+            --jq '.[].ref' > "$RUNNER_TEMP/fork-release-refs.txt"
+          if grep -Fxq "refs/tags/$RELEASE_TAG" "$RUNNER_TEMP/fork-release-refs.txt"; then
+            echo 'Refusing to reuse an existing tag, including one without a release.' >&2
+            exit 1
+          fi
+          latest=true
+          while IFS= read -r existing; do
+            if [[ "$existing" =~ ^v[0-9]+\.[0-9]+\.([0-9]{7,8})$ ]] && \
+               (( 10#${BASH_REMATCH[1]} > RELEASE_BASE )); then
+              latest=false
+            fi
+          done < "$RUNNER_TEMP/fork-release-tags.txt"
+          # Publish all verified assets together. Never clobber assets or reuse tags.
+          gh release create "$RELEASE_TAG" ./*.apk SHA256SUMS release-manifest.json \
+            --repo "$GH_REPO" --target "$GITHUB_SHA" \
+            --title "PipePipe fork $RELEASE_VERSION" \
+            --notes-file release-notes.md --latest="$latest"

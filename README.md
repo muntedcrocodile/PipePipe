@@ -7,6 +7,14 @@ NewPipe, reimagined: faster, more stable, and packed with more features.</h4>
 <a href="https://apt.izzysoft.de/fdroid/index/apk/InfinityLoop1309.NewPipeEnhanced"><img src="assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" width="207" /></a></p>
 <hr>
 
+## This fork: builds and updates
+
+This fork adds configurable video-row swipes, a persistent consuming Queue, and immediate manual subscription-feed refresh. Signed, optimized APKs are published automatically for commits to `main`.
+
+For Obtainium, add **https://github.com/muntedcrocodile/PipePipe** as the source and use normal GitHub releases. Select the APK matching your device, typically `arm64-v8a.*-release\.apk$`. The package and signing certificate are kept stable so future fork builds update the installed fork. This fork uses the separate `InfinityLoop1309.NewPipeEnhanced.queue.devicetest` package, preserving the previously distributed fork installation.
+
+See [release configuration and verification](docs/fork-release.md) and [device test results](docs/latest-device-acceptance.md).
+
 ## Beyond NewPipe
 
 #### YouTube Enhancements
