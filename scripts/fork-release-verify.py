@@ -60,11 +60,11 @@ def expected_version_name(base: int) -> str:
         raise SystemExit(f"Cannot read checked-in client default version: {source}") from error
     message = (
         f"Expected exactly one literal def appVersionName = \"MAJOR.MINOR.PATCH\" in {source}; "
-        "use three numeric components without leading zeroes"
+        "use three numeric components without leading zeroes and an optional prerelease suffix"
     )
     require(len(defaults) == 1, message)
     match = re.fullmatch(
-        r"""(["'])(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\1[ \t]*;?[ \t]*(?://[^\r\n]*)?""",
+        r"""(["'])(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?\1[ \t]*;?[ \t]*(?://[^\r\n]*)?""",
         defaults[0],
     )
     if match is None:
