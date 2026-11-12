@@ -18,8 +18,10 @@ The root records exact client and extractor commits. CI builds the triggering ro
 The shared version validator in `scripts/fork-release-verify.py` reads the pinned
 client's literal default `def appVersionName = "5.5.0"` without executing Gradle.
 It requires exactly one declaration with a quoted numeric `MAJOR.MINOR.PATCH`
-value and no leading zeroes (single quotes, an optional semicolon, and a trailing
-line comment are also accepted). A missing, duplicate, dynamic, or unexpectedly
+value and no leading zeroes, optionally followed by a literal prerelease suffix
+such as `-beta1` (single quotes, an optional semicolon, and a trailing line comment
+are also accepted). The upstream suffix does not enter the fork version: an
+upstream `5.6.0-beta1` allocates `5.6.<base>` using the same counter and ABI codes. A missing, duplicate, dynamic, or unexpectedly
 formatted default fails with a clear error. The major/minor components follow
 that default; the patch component is replaced by the allocated base. Version
 allocation, signing input validation, and APK verification use the same parser.
